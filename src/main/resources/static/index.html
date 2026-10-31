@@ -55,7 +55,10 @@
     background:#fafbfc; color:var(--dim); font-size:13px; cursor:pointer;
   }
   .chip:hover{border-color:var(--accent); color:var(--accent)}
-  .answer{margin-top:16px; white-space:pre-wrap; word-break:break-word}
+  /* 内容已由 md() 渲染成 HTML，这里必须 normal：
+     若用 pre-wrap，md() 拼进去的换行符会被当成真实换行，
+     段落/列表之间就会多出一大片空白 */
+  .answer{margin-top:16px; white-space:normal; word-break:break-word}
   .answer:empty{display:none}
   .answer h3{font-size:15px; margin:14px 0 6px}
   .answer ul{margin:6px 0; padding-left:22px}
