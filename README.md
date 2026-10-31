@@ -3,6 +3,11 @@
 > **一个能完整跑通的 RAG 练手项目。** 把《洛克王国》的游戏资料做成向量库，
 > 亲手走一遍「文档切分 → 向量化 → 入库 → 检索 → 拼 Prompt → 大模型回答」的全流程。
 
+<img src="docs/images/home.webp" width="820" alt="实际问答界面：提问后命中 3 条参考资料，回答中带 [1][2][3] 出处角标，下方列出原文与相似度">
+
+*↑ 一次真实提问的完整回放：问题 → 检索命中 3 条 → 回答里每个结论都带出处角标 →
+下方是命中的原文片段和相似度分数。不是示意图。*
+
 ## 这是什么
 
 很多人学 RAG 卡在同一个地方：概念都懂了——要先切 chunk，要算 embedding，要存向量库，
@@ -558,6 +563,8 @@ $env:MAVEN_OPTS='-Duser.language=en -Duser.country=US -Dfile.encoding=UTF-8'
 共同点：**这些错误全都不报错、或者报出一个和真实原因无关的错误**，
 所以每次都要回头验证真实状态，不能相信「成功」的输出。
 
+### 其余几条边界
+
 - **没有实现配种/孵蛋**：`breeding_profile`（蛋组、性别比例）在数据里有，
   但这个业务线没做，`spirit` 表也没落这些列。
 - **结构化表是全量重建**：`pets` 分支会先清空 `spirit / skill / spirit_skill` 再写，
@@ -566,3 +573,12 @@ $env:MAVEN_OPTS='-Duser.language=en -Duser.country=US -Dfile.encoding=UTF-8'
   文件变短时多出来的旧块会留在库里。补法见 `VectorRepository` 的注释。
 - **`/api/ingest` 没有鉴权**：它会触发全量解析和模型调用，生产必须加
   Spring Security + 内网限制。
+
+## 许可
+
+[MIT](LICENSE)。语料来自第三方数据站，不入库；仓库里的代码可自由使用。
+
+## 相关文档
+
+- [docs/vector-database-guide.md](docs/vector-database-guide.md) —— 向量库与检索的完整讲解，配 6 个实验
+- [docs/tech-summary-for-interview.md](docs/tech-summary-for-interview.md) —— 项目事实清单：做了什么、没做什么、数字从哪来
