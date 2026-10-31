@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>洛克王国 AI 助手</title>
+<!--
+  单文件主页：零外部依赖（不引用任何 CDN / 字体 / JS 库），因为本机访问国际线路很慢，
+  加载外部资源会让页面卡住。所有样式和脚本都内联在这里。
+  Spring Boot 会自动伺服 classpath:/static/ 下的静态资源，所以放到
+  src/main/resources/static/index.html 就能通过 http://localhost:8080/ 访问。
+-->
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e3e6ea; --fg:#1f2329; --dim:#6b7280;
+    --accent:#2563eb; --accent-dim:#dbeafe; --warn:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.7 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  header{padding:28px 20px 8px; max-width:860px; margin:0 auto}
+  h1{margin:0; font-size:24px; letter-spacing:.3px}
+  .sub{margin:6px 0 0; color:var(--dim); font-size:13px}
+  main{max-width:860px; margin:0 auto; padding:12px 20px 40px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; margin:16px 0; box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  .card h2{margin:0 0 12px; font-size:16px; font-weight:600}
+  textarea,input[type=text],input[type=number],select{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+    font:inherit; color:inherit; background:#fff; outline:none;
+  }
+  textarea:focus,input:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim)}
+  .row{display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap}
+  .row input[type=text]{flex:1; min-width:180px}
+  button{
+    padding:9px 18px; border:0; border-radius:8px; background:var(--accent); color:#fff;
+    font:inherit; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.55; cursor:default}
+  button.ghost{background:#fff; color:var(--dim); border:1px solid var(--line); font-weight:500}
+  button.ghost:hover{filter:none; color:var(--accent); border-color:var(--accent)}
+  .sid{font:12px/1.6 ui-monospace,Consolas,monospace; color:var(--dim); cursor:pointer}
+  label.k{color:var(--dim); font-size:13px; display:flex; align-items:center; gap:6px}
+  select{width:auto; max-width:260px; padding:6px 30px 6px 8px; font-size:13px}
+  input[type=number]{width:4.5em; padding:6px 8px}
+  .meta{color:var(--dim); font-size:13px; margin-left:auto}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+  .chip{
+    padding:4px 10px; border:1px solid var(--line); border-radius:999px;
+    background:#fafbfc; color:var(--dim); font-size:13px; cursor:pointer;
+  }
+  .chip:hover{border-color:var(--accent); color:var(--accent)}
+  .answer{margin-top:16px; white-space:pre-wrap; word-break:break-word}
+  .answer:empty{display:none}
+  .answer h3{font-size:15px; margin:14px 0 6px}
+  .answer ul{margin:6px 0; padding-left:22px}
+  .answer code{background:#f0f2f5; padding:1px 5px; border-radius:4px; font-size:13px}
+  .answer b{color:#111}
+  .cite{
+    display:inline-block; min-width:16px; padding:0 4px; margin:0 1px;
+    background:var(--accent-dim); color:var(--accent); border-radius:4px;
+    font-size:12px; font-weight:700; text-align:center; vertical-align:1px;
+  }
+  .sec-title{margin:20px 0 8px; font-size:13px; color:var(--dim); font-weight:600; letter-spacing:.4px}
+  .src{border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:8px 0; background:#fcfcfd}
+  .src .top{display:flex; gap:10px; align-items:baseline; flex-wrap:wrap}
+  .src .idx{font-weight:700; color:var(--accent); font-size:13px}
+  .src .who{font-weight:600}
+  .src .file{color:var(--dim); font-size:12px; font-family:ui-monospace,Consolas,monospace}
+  .src .score{margin-left:auto; font-size:12px; color:var(--dim); font-family:ui-monospace,Consolas,monospace}
+  .bar{height:3px; background:#eef1f4; border-radius:2px; margin:7px 0 8px; overflow:hidden}
+  .bar i{display:block; height:100%; background:var(--accent)}
+  .src .snip{color:#374151; font-size:13px; white-space:pre-wrap; word-break:break-word;
+             max-height:5.4em; overflow:hidden}
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:10px 0; font-size:14px}
+  .kv dt{color:var(--dim)}
+  .kv dd{margin:0}
+  .err{color:#b91c1c; background:#fef2f2; border:1px solid #fecaca;
+       padding:10px 12px; border-radius:8px; margin-top:14px; font-size:14px}
+  .attempt{border:1px dashed var(--line); border-radius:8px; padding:7px 10px; margin:6px 0;
+           font-size:12px; color:var(--dim); background:#fcfcfd}
+  .attempt .st{font-weight:700; margin:0 4px}
+  .attempt .st.ok{color:#15803d}
+  .attempt .st.bad{color:#b91c1c}
+  .attempt .st.skip{color:var(--warn)}
+  .attempt .snip{color:#7f1d1d; margin-top:4px; font-family:ui-monospace,Consolas,monospace}
+  .hint{color:var(--dim); font-size:13px}
+  footer{max-width:860px; margin:0 auto; padding:0 20px 50px; color:var(--dim); font-size:13px}
+  footer code{background:#eceff3; padding:1px 5px; border-radius:4px}
+  .load{display:inline-block; width:12px; height:12px; border:2px solid var(--accent-dim);
+        border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>洛克王国 AI 助手</h1>
+  <p class="sub">RAG 问答：向量检索 → 参考资料拼进 prompt → 模型作答。答案下方的「参考资料」就是检索到的原文和相似度。</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>提问</h2>
+    <textarea id="q" rows="2" placeholder="例如：火系克制哪些属性？ / 深渊罗隐怎么进化？ / 普通咕噜球怎么获得？"></textarea>
+    <div class="chips">
+      <span class="chip">火系克制哪些属性？</span>
+      <span class="chip">深渊罗隐怎么进化？</span>
+      <span class="chip">火花的血脉技能有哪些？</span>
+      <span class="chip">普通咕噜球怎么获得？</span>
+      <span class="chip">印记是什么效果？</span>
+    </div>
+    <div class="row">
+      <button id="ask">提问</button>
+      <label class="k">Provider
+        <select id="provider"><option value="">默认（自动降级）</option></select>
+      </label>
+      <label class="k">topK <input id="topk" type="number" value="5" min="1" max="50"></label>
+      <button id="newsession" class="ghost" type="button" title="清空当前会话，下一问重新开始">新会话</button>
+      <span id="meta" class="meta"></span>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <!-- 会话 id 存在 localStorage：刷新页面也能接着上一轮的上下文，点一下可以复制 -->
+      <span id="sid" class="sid" title="点一下复制会话 id"></span>
+    </div>
+    <div id="err" class="err" style="display:none"></div>
+    <div id="answer" class="answer"></div>
+    <div id="srcbox"></div>
+    <div id="attempts" class="hint" style="display:none"></div>
+  </section>
+
+  <section class="card">
+    <h2>精灵查询（走结构化表，不走向量检索）</h2>
+    <div class="row">
+      <input id="sp" type="text" placeholder="精灵中文名，例如 火花 / 罗隐 / 深渊罗隐">
+      <button id="lookup">查询</button>
+    </div>
+    <div id="spbox"></div>
+  </section>
+</main>
+
+<footer>
+  接口：<code>POST /api/chat</code> · <code>POST /api/chat/stream</code>（SSE） · <code>GET /api/sessions</code> ·
+  <code>GET /api/sessions/{id}</code> · <code>POST /api/sessions/{id}/compact</code> · <code>GET /api/llm/providers</code> ·
+  <code>GET /api/llm/metrics</code> · <code>POST /api/ingest</code> ·
+  <code>GET /api/spirits/{name}</code> · <code>GET /api/spirits/search?q=</code> · <code>GET /api/spirits/by-element/{element}</code>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  // ---------- 工具 ----------
+
+  // 必须转义：内容既来自语料也来自模型输出，直接塞 innerHTML 会有注入风险
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  // 极简 Markdown 渲染：只支持模型实际会用的几种（### 标题、**粗体**、- 列表、`代码`、[n] 引用角标）
+  // 不引第三方库，理由见文件头注释。
+  function md(text){
+    var lines = esc(text).split(/\r?\n/);
+    var out = [], inList = false;
+    for (var i = 0; i < lines.length; i++){
+      var ln = lines[i];
+      var bullet = ln.match(/^\s*[-*]\s+(.*)$/);
+      var head   = ln.match(/^\s*#{2,4}\s+(.*)$/);
+      if (bullet){
+        if (!inList){ out.push("<ul>"); inList = true; }
+        out.push("<li>" + inline(bullet[1]) + "</li>");
+        continue;
+      }
+      if (inList){ out.push("</ul>"); inList = false; }
+      if (head){ out.push("<h3>" + inline(head[1]) + "</h3>"); continue; }
+      if (ln.trim() === ""){ out.push(""); continue; }
+      out.push("<p style='margin:6px 0'>" + inline(ln) + "</p>");
+    }
+    if (inList){ out.push("</ul>"); }
+    return out.join("\n");
+  }
+
+  function inline(s){
+    return s
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\[(\d{1,2})\]/g, "<span class='cite'>$1</span>");
+  }
+
+  function showErr(msg){
+    var e = $("err");
+    e.style.display = "block";
+    e.textContent = msg;
+  }
+  function clearErr(){ $("err").style.display = "none"; }
+
+  // ---------- 会话（多轮上下文） ----------
+  //
+  // sessionId 存在 localStorage 而不是内存里：刷新页面后还能接着上一轮聊，
+  // 这正是「同一会话记住上下文」对用户最直观的表现。
+  // 服务端只认 id，不关心它从哪来，所以「新会话」= 换一个 id。
+
+  var SID_KEY = "locke.sessionId";
+
+  function getSessionId(){
+    try { return localStorage.getItem(SID_KEY) || ""; } catch(e){ return ""; }
+  }
+
+  // 统一从这里写：SSE 的 meta / done 都可能第一次带回 id，同步降级路径也有
+  function setSessionId(id){
+    if (!id){ return; }
+    try { localStorage.setItem(SID_KEY, id); } catch(e){ /* 隐私模式写不进去也不影响本次请求 */ }
+    renderSessionId();
+  }
+
+  function renderSessionId(){
+    var id = getSessionId();
+    $("sid").textContent = id ? ("会话 " + id + " · 点一下复制") : "新会话（下一问会自动创建）";
+  }
+
+  function newSession(){
+    try { localStorage.removeItem(SID_KEY); } catch(e){ /* 忽略 */ }
+    renderSessionId();
+    clearErr();
+    $("answer").innerHTML = "";
+    $("srcbox").innerHTML = "";
+    $("attempts").style.display = "none";
+    $("attempts").innerHTML = "";
+    setMeta("已开新会话，上一轮的上下文不会再带进来。");
+    $("q").focus();
+  }
+
+  // ---------- 提问 ----------
+
+  // ---------- Provider 目录 ----------
+
+  function loadProviders(){
+    fetch("/api/llm/providers")
+      .then(function(res){
+        if (!res.ok){ throw new Error("HTTP " + res.status); }
+        return res.json();
+      })
+      .then(function(c){
+        if (!c || !c.providers){ return; }
+        var sel = $("provider");
+        var current = sel.value;
+        while (sel.options.length > 1){ sel.remove(1); }
+        sel.options[0].textContent = "默认（" + (c.defaultProvider || "?") + "，自动降级）";
+        c.providers.forEach(function(p){
+          var opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.id + " · " + (p.model || "?")
+            + (p.isDefault ? "（默认）" : "")
+            + (p.available ? "" : " [" + (p.status || "不可用") + "]");
+          if (!p.available){ opt.disabled = true; }
+          sel.appendChild(opt);
+        });
+        if (current){ sel.value = current; }
+      })
+      .catch(function(){
+        // 目录接口失败不影响问答：下拉框保留「默认」，由服务端选 provider。
+      });
+  }
+
+  // ---------- 提问（SSE 主路径） ----------
+
+  var renderTimer = null;
+
+  function setMeta(text){ $("meta").textContent = text || ""; }
+
+  function n(v){ return (v == null) ? "?" : v; }
+
+  function scheduleAnswer(text){
+    if (renderTimer){ return; }
+    renderTimer = setTimeout(function(){
+      renderTimer = null;
+      $("answer").innerHTML = text ? md(text) : "";
+    }, 50);
+  }
+
+  function flushAnswer(text){
+    if (renderTimer){ clearTimeout(renderTimer); renderTimer = null; }
+    $("answer").innerHTML = text ? md(text) : "";
+  }
+
+  function parseSseFrame(frame, onEvent){
+    var event = "message";
+    var data = [];
+    frame.split("\n").forEach(function(line){
+      if (!line || line.charAt(0) === ":"){ return; }
+      var colon = line.indexOf(":");
+      var field = colon < 0 ? line : line.substring(0, colon);
+      var value = colon < 0 ? "" : line.substring(colon + 1);
+      if (value.charAt(0) === " "){ value = value.substring(1); }
+      if (field === "event"){ event = value; }
+      else if (field === "data"){ data.push(value); }
+    });
+    if (!data.length){ return; }
+    var obj;
+    try { obj = JSON.parse(data.join("\n")); }
+    catch(e){ throw new Error("SSE 数据不是合法 JSON"); }
+    if (!obj.type){ obj.type = event; }
+    onEvent(obj);
+  }
+
+  async function readSse(res, onEvent){
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder("utf-8");
+    var buffer = "";
+    while (true){
+      var part = await reader.read();
+      if (part.done){ break; }
+      buffer += decoder.decode(part.value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
+      var idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0){
+        var frame = buffer.substring(0, idx);
+        buffer = buffer.substring(idx + 2);
+        parseSseFrame(frame, onEvent);
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()){ parseSseFrame(buffer, onEvent); }
+  }
+
+  async function ask(){
+    var question = $("q").value.trim();
+    if (!question){ $("q").focus(); return; }
+    var topK = parseInt($("topk").value, 10);
+    if (!(topK >= 1)){ topK = 5; }
+    var provider = $("provider").value || null;
+
+    clearErr();
+    var btn = $("ask");
+    btn.disabled = true;
+    setMeta("检索并生成中…");
+    $("answer").innerHTML = "";
+    $("srcbox").innerHTML = "";
+    $("attempts").style.display = "none";
+    $("attempts").innerHTML = "";
+
+    var t0 = Date.now();
+    var acc = "";
+    var sources = [];
+    var doneEvent = null;
+    var streamError = null;
+
+    try {
+      var res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream"
+        },
+        body: JSON.stringify({
+          question: question,
+          topK: topK,
+          provider: provider,
+          // null 表示这是一个全新会话；服务端会在响应里回一个新 id
+          sessionId: getSessionId() || null
+        })
+      });
+
+      if (!res.ok){
+        var text = await res.text();
+        var data = null;
+        try { data = JSON.parse(text); } catch(e){ /* 非 JSON 错误体 */ }
+        throw new Error((data && (data.detail || data.title)) || text.substring(0, 200) || ("HTTP " + res.status));
+      }
+
+      var contentType = res.headers.get("content-type") || "";
+      if (contentType.indexOf("text/event-stream") < 0){
+        // 反向代理/旧版本可能把 SSE 接口退回成普通 JSON，这里兼容一次。
+        var json = await res.json();
+        renderSyncResult(json, t0);
+        return;
+      }
+
+      await readSse(res, function(ev){
+        if (ev.type === "meta"){
+          if (ev.sessionId){ setSessionId(ev.sessionId); }
+          sources = ev.sources || [];
+          setMeta((ev.provider || "?") + " · " + (ev.model || "?")
+            + " · 检索 " + n(ev.retrievalMs) + "ms · 命中 " + sources.length + " 条"
+            + (ev.historyTokens ? " · 记忆 " + ev.historyTokens + " tokens" : "")
+            + " · 生成中…");
+          renderSources(sources);
+        } else if (ev.type === "delta"){
+          acc += (ev.delta || "");
+          scheduleAnswer(acc);
+        } else if (ev.type === "error"){
+          streamError = ev.message || "模型服务异常";
+          showErr("模型调用失败：" + streamError);
+        } else if (ev.type === "done"){
+          doneEvent = ev;
+          if (ev.answer){ acc = ev.answer; }
+          flushAnswer(acc);
+          if (ev.sources){ sources = ev.sources; }
+          renderSources(sources);
+          renderDone(ev, t0, sources, streamError);
+        }
+      });
+
+      if (!doneEvent){
+        if (acc){
+          flushAnswer(acc);
+          showErr("流式响应提前结束，以上内容可能不完整。");
+        } else {
+          showErr(streamError || "流式响应已结束，但没有收到任何内容。");
+        }
+      }
+    } catch(err){
+      flushAnswer(acc);
+      showErr("提问失败：" + err.message + "（检查服务端日志、数据库与 API Key）");
+      setMeta("");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderDone(ev, t0, sources, streamError){
+    if (ev.answer){ flushAnswer(ev.answer); }
+    var bits = [(ev.provider || "?") + " · " + (ev.model || "?")];
+    bits.push("命中 " + (sources ? sources.length : 0) + " 条");
+    if (ev.promptTokens != null || ev.completionTokens != null){
+      bits.push("prompt " + n(ev.promptTokens)
+        + " · 生成 " + n(ev.completionTokens)
+        + " · 总计 " + n(ev.totalTokens) + " tokens"
+        + (ev.estimated ? "（估算）" : ""));
+    }
+    if (ev.totalLatencyMs != null){
+      bits.push("服务端 " + ev.totalLatencyMs + "ms（检索 " + n(ev.retrievalMs)
+        + "ms / 模型 " + n(ev.latencyMs) + "ms）");
+    }
+    bits.push("往返 " + (Date.now() - t0) + "ms");
+    if (ev.historyTokens){ bits.push("带上历史 " + ev.historyTokens + " tokens"); }
+    if (ev.contextCompressed){ bits.push("已压缩上文"); }
+    if (ev.sessionId){ setSessionId(ev.sessionId); }
+    if (ev.fallback){ bits.push("已降级"); }
+    setMeta(bits.join(" · "));
+    renderAttempts(ev.attempts || []);
+
+    if (ev.success === false && !streamError){
+      showErr(ev.fallback
+        ? "所有模型 Provider 均调用失败，已返回兜底回复。"
+        : "模型服务异常，答案可能不完整。");
+    }
+  }
+
+  function renderSyncResult(d, t0){
+    flushAnswer(d.answer || "");
+    var bits = [(d.provider || "?") + " · " + (d.model || "?")];
+    bits.push("命中 " + ((d.sources || []).length) + " 条");
+    if (d.promptTokens != null || d.completionTokens != null){
+      bits.push("prompt " + n(d.promptTokens)
+        + " · 生成 " + n(d.completionTokens)
+        + " · 总计 " + n(d.totalTokens) + " tokens"
+        + (d.estimatedTokens ? "（估算）" : ""));
+    }
+    bits.push("服务端 " + n(d.latencyMs) + "ms · 往返 " + (Date.now() - t0) + "ms");
+    if (d.historyTokens){ bits.push("带上历史 " + d.historyTokens + " tokens"); }
+    if (d.contextCompressed){ bits.push("已压缩上文"); }
+    if (d.sessionId){ setSessionId(d.sessionId); }
+    if (d.fallback){ bits.push("已降级"); }
+    setMeta(bits.join(" · "));
+    renderSources(d.sources || []);
+    renderAttempts(d.attempts || []);
+  }
+
+  function renderAttempts(attempts){
+    var box = $("attempts");
+    if (!attempts || !attempts.length){
+      box.style.display = "none";
+      box.innerHTML = "";
+      return;
+    }
+    var html = "<div class='sec-title'>本次调用尝试（按顺序）</div>";
+    attempts.forEach(function(a, i){
+      var status = a.status || "?";
+      var cls = status === "success" ? "ok" : (status === "failed" ? "bad" : "skip");
+      html += "<div class='attempt'>"
+            +   "<span class='idx'>[" + (i + 1) + "]</span> "
+            +   "<b>" + esc(a.provider || "?") + "</b> "
+            +   "<span class='file'>" + esc(a.model || "") + "</span>"
+            +   "<span class='st " + cls + "'>" + esc(status) + "</span>"
+            +   "<span class='score'>" + n(a.latencyMs) + "ms</span>"
+            +   (a.promptTokens != null || a.completionTokens != null
+                  ? " <span class='file'>" + n(a.promptTokens) + "+" + n(a.completionTokens) + " tokens</span>"
+                  : "")
+            +   (a.error ? "<div class='snip'>" + esc(a.error) + "</div>" : "")
+            + "</div>";
+    });
+    box.innerHTML = html;
+    box.style.display = "block";
+  }
+
+  function renderSources(sources){
+    sources = sources || [];
+    if (!sources.length){ return; }
+    var html = "<div class='sec-title'>检索到的参考资料（相似度越高越相关）</div>";
+    sources.forEach(function(s, i){
+      var score = (s.score == null) ? null : Number(s.score);
+      var scoreTxt = (score == null) ? "结构化兜底（无相似度）" : score.toFixed(4);
+      // pgvector 的余弦相似度大致落在 0~1，用它当进度条长度
+      var pct = (score == null) ? 0 : Math.max(0, Math.min(1, score)) * 100;
+      html += "<div class='src'>"
+            +   "<div class='top'>"
+            +     "<span class='idx'>[" + (i + 1) + "]</span>"
+            +     (s.spiritName ? "<span class='who'>" + esc(s.spiritName) + "</span>" : "")
+            +     "<span class='file'>" + esc(s.source || "") + "</span>"
+            +     "<span class='score'>相似度 " + scoreTxt + "</span>"
+            +   "</div>"
+            +   "<div class='bar'><i style='width:" + pct.toFixed(1) + "%'></i></div>"
+            +   "<div class='snip'>" + esc(s.snippet || "") + "</div>"
+            + "</div>";
+    });
+    $("srcbox").innerHTML = html;
+  }
+
+  // ---------- 精灵查询 ----------
+
+  function lookup(){
+    var name = $("sp").value.trim();
+    if (!name){ $("sp").focus(); return; }
+    clearErr();
+    var btn = $("lookup");
+    btn.disabled = true;
+    $("spbox").innerHTML = "<p class='hint'><span class='load'></span> 查询中…</p>";
+
+    fetch("/api/spirits/" + encodeURIComponent(name))
+    .then(function(res){
+      if (res.status === 404){ throw new Error("没有找到叫「" + name + "」的精灵（试试 /api/spirits/search?q= 模糊搜索）"); }
+      if (!res.ok){ throw new Error("HTTP " + res.status); }
+      return res.json();
+    })
+    .then(function(s){ $("spbox").innerHTML = renderSpirit(s); })
+    .catch(function(err){ $("spbox").innerHTML = "<p class='hint'>" + esc(err.message) + "</p>"; })
+    .finally(function(){ btn.disabled = false; });
+  }
+
+  function zh(obj){
+    if (!obj) { return ""; }
+    if (typeof obj === "string") { return obj; }
+    if (obj.zh){
+      if (typeof obj.zh === "string") { return obj.zh; }
+      return obj.zh.name || obj.zh.label || "";
+    }
+    return "";
+  }
+
+  function typeName(t){
+    if (!t) { return "—"; }
+    var label = zh(t.localized);
+    return label ? (label + "（" + esc(t.name) + "）") : esc(t.name || "—");
+  }
+
+  function renderSpirit(s){
+    var name = zh(s.localized) || s.form || s.name || "?";
+    var total = ((s.baseHp||0)+(s.basePhyAtk||0)+(s.baseMagAtk||0)+(s.basePhyDef||0)+(s.baseMagDef||0)+(s.baseSpd||0));
+    var html = "<div class='sec-title'>" + esc(name) + "</div><dl class='kv'>"
+      + "<dt>属性</dt><dd>" + typeName(s.mainType) + (s.subType ? " / " + typeName(s.subType) : "") + "</dd>"
+      + "<dt>种族值</dt><dd>HP " + s.baseHp + " · 物攻 " + s.basePhyAtk + " · 魔攻 " + s.baseMagAtk
+      +     " · 物防 " + s.basePhyDef + " · 魔防 " + s.baseMagDef + " · 速度 " + s.baseSpd
+      +     "（合计 " + total + "）</dd>"
+      + "<dt>实装</dt><dd>" + (s.implemented ? "是" : "否") + (s.isLeaderForm ? " · 首领形态" : "") + "</dd>"
+      + "<dt>技能</dt><dd>升级 " + ((s.movePool||[]).length) + " 个 · 技能石 " + ((s.moveStones||[]).length)
+      +     " 个 · 血脉 " + ((s.legacyMoves||[]).length) + " 个</dd>";
+    if (s.trait){
+      html += "<dt>特性</dt><dd>" + esc(zh(s.trait.localized) || s.trait.name || "")
+           +   (s.trait.effect ? " —— " + esc(zh(s.trait.effect) || s.trait.effect) : "") + "</dd>";
+    }
+    html += "</dl>";
+    html += "<p class='hint'>这是结构化表（spirit / skill）查出来的，没走向量检索。"
+         +  "把它和上面问答的检索结果对照着看，就能分清「精确查询」和「语义检索」的区别。</p>";
+    return html;
+  }
+
+  // ---------- 绑定 ----------
+
+  $("ask").addEventListener("click", ask);
+  $("newsession").addEventListener("click", newSession);
+  $("sid").addEventListener("click", function(){
+    var id = getSessionId();
+    if (!id || !navigator.clipboard){ return; }
+    navigator.clipboard.writeText(id);
+    setMeta("已复制会话 id：" + id);
+  });
+  $("lookup").addEventListener("click", lookup);
+  $("q").addEventListener("keydown", function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ ask(); }
+  });
+  $("sp").addEventListener("keydown", function(e){ if (e.key === "Enter"){ lookup(); } });
+  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(c){
+    c.addEventListener("click", function(){ $("q").value = c.textContent; $("q").focus(); });
+  });
+  renderSessionId();
+  loadProviders();
+})();
+</script>
+</body>
+</html>

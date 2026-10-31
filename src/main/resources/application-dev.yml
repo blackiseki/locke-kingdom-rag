@@ -1,0 +1,25 @@
+# 开发环境：本地 IDE 跑，日志给足，方便看检索命中了什么
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/locke
+    username: postgres
+    password: postgres
+
+locke:
+  ai:
+    retriever:
+      top-k: 3                    # 本地调试少召回一点，Prompt 看得清楚
+      similarity-threshold: 0.4
+    ingest:
+      batch-size: 20
+
+logging:
+  level:
+    com.locke.ai: DEBUG
+    org.springframework.jdbc.core: DEBUG          # 打印实际执行的 SQL
+    org.springframework.ai: DEBUG                 # 看 Spring AI 的检索/调用细节
+    org.springframework.ai.vectorstore.pgvector: TRACE
+    # 全量入库时 Ollama 会刷大量请求日志，嫌吵就调到 WARN
+    org.springframework.ai.ollama: INFO
+    # 首次启动会自动拉 bge-m3（约 1.2GB），这行的 INFO 日志能看到进度
+    org.springframework.ai.ollama.init: DEBUG

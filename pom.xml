@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.locke</groupId>
+    <artifactId>locke-kingdom-ai</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>locke-kingdom-ai</name>
+    <description>洛克王国 AI 助手：基于 Spring AI + PgVector 的 RAG 问答服务</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
+    </properties>
+
+    <dependencies>
+        <!-- ==================== Web / 校验 ==================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- ==================== 持久化 ==================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway 负责全部 DDL，所以 application.yml 里
+             spring.ai.vectorstore.pgvector.initialize-schema 必须为 false。
+             Boot 4 的 starter 名是 spring-boot-starter-flyway（不再是裸的 flyway-core），
+             非内存/文件型库还要加方言模块。版本都由 Boot 父 POM 管（Flyway 12.4.0）。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ==================== Spring AI ==================== -->
+        <!-- 对话模型：不再使用 Spring AI 的 DeepSeek/OpenAI starter。
+             对话统一走 com.locke.ai.llm 下的 OpenAI-compatible HTTP 传输层，
+             才能在运行期切换 Provider 并做失败降级。 -->
+
+        <!-- 向量模型：DeepSeek 没有 embedding 接口，用本地 Ollama 跑 bge-m3（1024 维）。
+             这个 starter 同时会注册 OllamaChatModel，因此 application.yml 里
+             spring.ai.model.chat=none 是必须的，避免多余的 ChatModel Bean。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
+
+        <!-- 向量库：PostgreSQL + pgvector -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
+
+        <!-- 文档解析：BinData 下的数据字典 Markdown -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-markdown-document-reader</artifactId>
+        </dependency>
+
+        <!-- ==================== 测试 ==================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Boot 4 把测试切片拆成了独立模块：@AutoConfigureMockMvc 不再由
+             spring-boot-starter-test 提供，包名也从
+             org.springframework.boot.test.autoconfigure.web.servlet
+             挪到了 org.springframework.boot.webmvc.test.autoconfigure。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 显式指定，避免仓库里存在多个 @SpringBootApplication 时找不到唯一主类 -->
+                    <mainClass>com.locke.ai.LockeAiApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

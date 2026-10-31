@@ -1,0 +1,53 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### 本地密钥 ###
+.env
+.env.*
+!.env.example
+*.local.yml
+application-local.yml
+
+### 日志 ###
+*.log
+logs/
+
+### 本地语料（体积大 / 有版权风险，不入库） ###
+data/raw/*
+data/wiki/*
+# 但保留目录本身和格式样例
+!data/raw/.gitkeep
+!data/wiki/.gitkeep
+!data/raw/*.sample.json
+!data/wiki/*.sample.md
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/

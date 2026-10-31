@@ -1,0 +1,72 @@
+# 一键起 PgVector + Ollama + 应用
+#   docker compose up -d              # 全部起来
+#   docker compose up -d pgvector ollama   # 只起依赖，应用在 IDE 里跑
+#
+# 默认对话 Provider 需要 DeepSeek 密钥；通义降级可选。写在同目录 .env 里：
+#   DEEPSEEK_API_KEY=sk-xxx
+#   DASHSCOPE_API_KEY=sk-xxx   # 可选；不配则通义被标记为 missing api-key 并跳过
+# 向量模型是本地的 Ollama，不需要任何 key。
+
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: locke-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: locke
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d locke"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: locke-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # 首次启动会自动拉 bge-m3（约 1.2GB，见 application.yml 的 pull-model-strategy）。
+    # 想手动先拉好：
+    #   docker exec -it locke-ollama ollama pull bge-m3
+    #   docker exec -it locke-ollama ollama list
+
+  app:
+    build: .
+    container_name: locke-app
+    restart: unless-stopped
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://pgvector:5432/locke
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?请先设置 DEEPSEEK_API_KEY（对话模型密钥）}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      SPRING_AI_OLLAMA_BASE_URL: http://ollama:11434
+      # 容器里看到的是挂载进来的数据目录，不是宿主机的路径
+      LOCKE_DATA_ROOT: /data/locke
+    ports:
+      - "8080:8080"
+    volumes:
+      # 把语料只读挂进容器，这样 /api/ingest 才能在容器里跑。
+      # 宿主机路径用 .env 里的 LOCKE_DATA_ROOT 指定，例如：
+      #   LOCKE_DATA_ROOT=D:/data/rocom/public/data
+      - "${LOCKE_DATA_ROOT:-./data}:/data/locke:ro"
+
+volumes:
+  pgdata:
+  ollama:

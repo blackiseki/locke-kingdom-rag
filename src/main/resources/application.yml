@@ -1,0 +1,152 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: locke-kingdom-ai
+  profiles:
+    default: dev
+
+  # ============================================================
+  # Spring AI
+  # ============================================================
+  ai:
+    # 对话链路已经改为自建的 OpenAI-compatible 传输层（见 com.locke.ai.llm），
+    # 不再让 Spring AI 装配 ChatModel。这里必须显式设成 none：
+    # 否则 Ollama starter 的 ChatModel 自动装配会按默认条件生效。
+    # embedding 仍然用本地 Ollama。
+    model:
+      chat: none
+      embedding: ollama
+
+    # ---------- 向量：本地 Ollama ----------
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        model: ${EMBEDDING_MODEL:bge-m3}
+        # ⚠ 默认只有 2048，而精灵档案最长约 3000 字（中文接近 1 字 1 token），
+        #   不改大就会被静默截断。bge-m3 支持 8192，这里给足。
+        num-ctx: 8192
+        # 注意：这里刻意不设 num-batch。它控制的是「模型内部 prompt 处理的批大小」
+        # （默认 512），不是「一次请求带几条文本」——我一开始就理解错了，设成 32
+        # 反而会降低 GPU 吞吐。一次请求带多少条由 Spring AI 的 BatchingStrategy
+        # 按 token 预算决定，不需要手工配。
+      init:
+        # 首次启动自动 ollama pull 缺失的模型，省一步手工操作。
+        # 生产环境见 application-prod.yml：改回 never 并预先拉好。
+        pull-model-strategy: when_missing
+        timeout: 10m
+
+    # ---------- 向量库 ----------
+    vectorstore:
+      pgvector:
+        # DDL 全部归 Flyway（db/migration），这里必须 false，
+        # 否则 Spring AI 会照自己的模板再建一次表，两边定义容易打架。
+        initialize-schema: false
+        # 必须与向型模型输出维度一致（bge-m3 = 1024），
+        # 也必须与 V1__init_schema.sql 里的 vector(1024) 一致。
+        dimensions: ${EMBEDDING_DIMENSIONS:1024}
+        index-type: HNSW                  # NONE | IVFFLAT | HNSW（注意全大写 IVFFLAT）
+        distance-type: COSINE_DISTANCE
+        table-name: vector_store
+        schema-name: public
+        id-type: UUID
+        max-document-batch-size: 500
+
+  # ============================================================
+  # 数据库
+  # ============================================================
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/locke}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 10
+      pool-name: locke-pool
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    clean-disabled: true
+
+# ============================================================
+# 业务配置
+# ============================================================
+locke:
+  ai:
+    retriever:
+      top-k: 5
+      similarity-threshold: 0.5
+    # ---------- 会话记忆（多轮上下文 + 压缩）----------
+    # 同一 sessionId 的追问会带上历史；历史超出预算时把更早的部分压成滚动摘要。
+    # 关掉 enabled 后所有请求都退化成单轮，等同于改造前的行为。
+    memory:
+      enabled: ${MEMORY_ENABLED:true}
+      # 历史原文的 token 预算：不含摘要、不含本轮检索资料、不含本轮问题。
+      # 调大会更连贯也更贵；1200 大约相当于 6~10 轮短问答
+      max-history-tokens: ${MEMORY_MAX_HISTORY_TOKENS:1200}
+      # 无论预算是否用完，最近 N 条消息一定保留原文（防止刚说完的话立刻被压成摘要）
+      keep-recent-messages: ${MEMORY_KEEP_RECENT:6}
+      # 单次加载的最大历史条数，防止超长会话一次读太多
+      max-history-messages: ${MEMORY_MAX_HISTORY_MESSAGES:60}
+      # 溢出条数达到这个值才真的压缩：只溢出 1 条就压，白花一次模型调用还丢细节
+      compress-min-messages: ${MEMORY_COMPRESS_MIN:2}
+      # 摘要长度上限（中文近似 1 字 1 token）
+      summary-max-tokens: ${MEMORY_SUMMARY_TOKENS:400}
+    ingest:
+      # 真实语料根目录（rocom.aoe.top 数据站导出的洛克王国世界游戏数据）。
+      # 子路径由 DataRoot 推导：pets/*.json、moves.json、items.json、types.json、
+      # game_terms.json、personalities.json、magic_items.json、BinData/*.md
+      data-root: ${LOCKE_DATA_ROOT:./data}
+      # 只入库 implemented=true 的精灵（1065 只里 613 只已实装），
+      # 其余是测试/未上线数据，文案是策划占位内容
+      implemented-only: ${INGEST_IMPLEMENTED_ONLY:true}
+      # 单篇精灵档案里最多列几个升级技能（超出会写「其余 N 个未列出」）
+      max-moves-per-doc: ${MAX_MOVES_PER_DOC:25}
+      include-legacy-moves: ${INCLUDE_LEGACY_MOVES:true}
+      batch-size: 50
+      # 长 Markdown 段落按 token 二次切分的块大小
+      token-chunk-size: 800
+    llm:
+      # 默认 Provider；请求体里的 provider 字段可以覆盖它。
+      provider: ${LLM_PROVIDER:deepseek}
+      # 默认 Provider 失败后的尝试顺序；未列出的 Provider 会排在最后兜底。
+      # 支持逗号分隔的环境变量，例如 LLM_FALLBACK=tongyi,deepseek
+      fallback: ${LLM_FALLBACK:tongyi}
+      providers:
+        deepseek:
+          enabled: true
+          base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+          api-key: ${DEEPSEEK_API_KEY:}
+          model: ${DEEPSEEK_MODEL:deepseek-flash}
+          temperature: 0.3
+          max-tokens: 2048
+          timeout: 60s
+          requires-api-key: true
+          include-usage: true
+          # 关掉思考模式。默认开启且 effort=high：
+          # 实测同一个问题 3028ms -> 717ms，且思考 token 也计费。
+          # 思考模式下 temperature 会被静默忽略，关掉它温度才生效。
+          extra-body:
+            thinking:
+              type: disabled
+        tongyi:
+          # 通义走 DashScope 的 OpenAI-compatible 模式；没有配置 key 时会
+          # 被标记为 missing api-key，路由会跳过它，不影响 DeepSeek 使用。
+          enabled: ${TONGYI_ENABLED:true}
+          base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+          api-key: ${DASHSCOPE_API_KEY:}
+          model: ${DASHSCOPE_MODEL:qwen-plus}
+          temperature: 0.3
+          max-tokens: 2048
+          timeout: 60s
+          requires-api-key: true
+          include-usage: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    com.locke.ai: INFO

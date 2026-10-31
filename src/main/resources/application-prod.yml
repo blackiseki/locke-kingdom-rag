@@ -1,0 +1,46 @@
+# 生产环境：密钥一律走环境变量，日志收敛，连接池放大
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+      connection-timeout: 3000
+
+  ai:
+    ollama:
+      init:
+        # 生产不要自动拉模型：启动会被几百 MB 的下载卡住。
+        # 部署前手工执行一次：ollama pull bge-m3
+        pull-model-strategy: never
+        embedding:
+          include: false
+
+  flyway:
+    clean-disabled: true
+    validate-on-migrate: true
+
+server:
+  port: 8080
+  tomcat:
+    threads:
+      max: 200
+  # 生产建议放在网关后面，由网关统一处理 TLS 和跨域
+  forward-headers-strategy: framework
+
+locke:
+  ai:
+    retriever:
+      top-k: 5
+      similarity-threshold: 0.5
+    ingest:
+      batch-size: 100
+
+logging:
+  level:
+    root: WARN
+    com.locke.ai: INFO
+  # 注意别把 prompt 正文和用户问题打进生产日志：
+  # 语料来自游戏数据包，用户问题属于个人信息。排查时临时开 DEBUG。
